@@ -3,6 +3,8 @@
 This repo turns a **Lenovo ThinkSmart View (CD-18781Y)**, the 8" Teams/Zoom desk display, into a lean Home Assistant
 wall panel. It runs **Nura** (the renamed postmarketOS) v26.06 with a mainline Linux kernel.
 
+<a href="docs/native-panel-home.png"><img src="docs/native-panel-home.png" alt="Native panel home screen on the ThinkSmart View" width="240"></a>
+
 It reproduces a working reference unit exactly:
 - It boots from a locked bootloader through a signed lk2nd, with no unlocking needed.
 - It joins your Wi-Fi on first boot, needing no keyboard.
