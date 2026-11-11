@@ -1,0 +1,4 @@
+# the monitoring host remote actions (see /usr/local/bin/mc-remote). Nothing else.
+mcremote ALL=(root) NOPASSWD: /usr/bin/systemctl reboot
+mcremote ALL=(kiosk) NOPASSWD: /usr/local/bin/mc-screen
+mcremote ALL=(tsvcam) NOPASSWD: /usr/local/bin/mc-camera

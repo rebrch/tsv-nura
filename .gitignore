@@ -1,0 +1,22 @@
+# local settings and secrets - never commit
+.env
+secrets/*
+!secrets/README
+kiosk/native/config/config.toml
+# build outputs, tools, device backups
+out/
+edl/
+backup/
+kiosk/native/target/
+*.img
+!flash/lk2nd-signed-23.1.img
+.DS_Store
+.build/
+# ---- proprietary Qualcomm/Lenovo files: kept locally, NEVER pushed. Re-obtain with the fetch scripts:
+#   flash/fetch-firehose.sh, camera/vendor/fetch.sh, camera/vendor/dt/extract-stock-dtb.sh
+/flash/firehose/*.mbn
+/flash/firehose/rawprogram0.xml
+/camera/vendor/lib/
+/camera/vendor/etc/
+/camera/vendor/dt/*.dtb
+/camera/vendor/dt/*.dts

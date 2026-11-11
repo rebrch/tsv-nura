@@ -1,0 +1,126 @@
+From 8d02782137eb858cb387d7bff1b6eacb27c48cfe Mon Sep 17 00:00:00 2001
+From: Your Name <you@example.com>
+Date: Mon, 9 Nov 2026 23:12:59 -0500
+Subject: [PATCH 4/4] arm64: dts: qcom: apq8053-lenovo-cd-18781y: Enable front
+ camera
+
+Describe the Samsung S5KC505A front camera of the Lenovo ThinkSmart
+View: it sits on CCI master 0 at address 0x37, runs from MCLK0 at
+24 MHz, and sends RAW10 over two data lanes to CSIPHY0.
+
+The analogue and digital core supplies are GPIO-switched (GPIO119 and
+GPIO118) behind PM8953 L17 and L2. As in the vendor firmware, L2 is
+raised to 1.2 V for the sensor core supply. Reset and standby are on
+GPIO40 and GPIO39.
+
+Signed-off-by: Your Name <you@example.com>
+---
+ .../dts/qcom/apq8053-lenovo-cd-18781y.dts     | 78 ++++++++++++++++++-
+ 1 file changed, 77 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/apq8053-lenovo-cd-18781y.dts b/arch/arm64/boot/dts/qcom/apq8053-lenovo-cd-18781y.dts
+index cecb92f..2292096 100644
+--- a/arch/arm64/boot/dts/qcom/apq8053-lenovo-cd-18781y.dts
++++ b/arch/arm64/boot/dts/qcom/apq8053-lenovo-cd-18781y.dts
+@@ -126,6 +126,29 @@ cont_splash_mem: cont-splash@90001000 {
+ 		};
+ 	};
+ 
++	/* GPIO-switched supplies of the front camera, fed from PM8953 L17 and L2 */
++	cam_avdd: cam-avdd-regulator {
++		compatible = "regulator-fixed";
++		regulator-name = "cam_avdd";
++		regulator-min-microvolt = <2850000>;
++		regulator-max-microvolt = <2850000>;
++		gpio = <&tlmm 119 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		vin-supply = <&pm8953_l17>;
++		startup-delay-us = <1000>;
++	};
++
++	cam_dvdd: cam-dvdd-regulator {
++		compatible = "regulator-fixed";
++		regulator-name = "cam_dvdd";
++		regulator-min-microvolt = <1200000>;
++		regulator-max-microvolt = <1200000>;
++		gpio = <&tlmm 118 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		vin-supply = <&pm8953_l2>;
++		startup-delay-us = <1000>;
++	};
++
+ 	panel_avdd: panel-avdd-regulator {
+ 		compatible = "regulator-fixed";
+ 		regulator-name = "panel_avdd";
+@@ -175,6 +198,59 @@ wlan_pwrseq: wlan-sdio-pwrseq {
+ 	};
+ };
+ 
++&camss {
++	vdda-supply = <&pm8953_s3>;
++
++	status = "okay";
++
++	ports {
++		port@0 {
++			reg = <0>;
++
++			csiphy0_ep: endpoint {
++				clock-lanes = <7>;
++				data-lanes = <0 1>;
++				remote-endpoint = <&front_cam_ep>;
++			};
++		};
++	};
++};
++
++&cci {
++	pinctrl-0 = <&cci0_default>, <&cci1_default>, <&camss_mclk0_default>;
++	pinctrl-names = "default";
++
++	status = "okay";
++};
++
++&cci_i2c0 {
++	camera@37 {
++		compatible = "samsung,s5kc505a";
++		reg = <0x37>;
++
++		clocks = <&gcc GCC_CAMSS_MCLK0_CLK>;
++		assigned-clocks = <&gcc MCLK0_CLK_SRC>;
++		assigned-clock-rates = <24000000>;
++
++		reset-gpios = <&tlmm 40 GPIO_ACTIVE_LOW>;
++		powerdown-gpios = <&tlmm 39 GPIO_ACTIVE_LOW>;
++
++		vddio-supply = <&pm8953_l6>;
++		vdda-supply = <&cam_avdd>;
++		vddd-supply = <&cam_dvdd>;
++
++		orientation = <0>;
++		rotation = <270>;
++
++		port {
++			front_cam_ep: endpoint {
++				data-lanes = <1 2>;
++				link-frequencies = /bits/ 64 <129000000 429000000 480000000>;
++				remote-endpoint = <&csiphy0_ep>;
++			};
++		};
++	};
++};
+ &gpu_zap_shader {
+ 	firmware-name = "qcom/msm8953/lenovo/cd-18781y/a506_zap.mdt";
+ };
+@@ -455,7 +531,7 @@ pm8953_l1: l1 {
+ 		};
+ 
+ 		pm8953_l2: l2 {
+-			regulator-min-microvolt = <975000>;
++			regulator-min-microvolt = <1200000>;
+ 			regulator-max-microvolt = <1225000>;
+ 			regulator-always-on;
+ 		};
+-- 
+2.47.3
+

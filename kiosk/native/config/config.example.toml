@@ -1,0 +1,50 @@
+# tsv-panel configuration. Copy to config.toml (git-ignored) and use YOUR entity ids.
+# Installed to /etc/tsv-panel/config.toml by kiosk/setup.sh. On the device you can also edit it in place
+# and `sudo systemctl restart tsv-kiosk`.
+
+[home_assistant]
+# kiosk/setup.sh replaces this with HA_URL from .env. Both http:// and https:// work (ws/wss derived).
+url = "http://homeassistant.local:8123"
+# Long-lived access token, one line, root:kiosk 0640. Written from HA_TOKEN by kiosk/setup.sh, or by hand:
+#   printf '%s' 'TOKEN' | sudo tee /etc/tsv-panel/ha_token >/dev/null
+#   sudo chown root:kiosk /etc/tsv-panel/ha_token && sudo chmod 0640 /etc/tsv-panel/ha_token
+token_file = "/etc/tsv-panel/ha_token"
+
+[home]
+weather = "weather.forecast_home"
+
+# Lighting row on the home screen (one row, evenly spaced; 4 fit well). Tap = toggle, hold 1 s = brightness.
+lights = [
+  { entity = "light.entryway", label = "Entryway" },
+  { entity = "light.kitchen", label = "Kitchen" },
+  { entity = "light.hallway", label = "Hallway" },
+  { entity = "light.living_room", label = "Living Room" },
+]
+
+# Climate grid, filled row by row.
+climate_columns = 2
+climate = [
+  { entity = "sensor.living_room_temperature", label = "Room Temp" },
+  { entity = "sensor.office_temperature", label = "Office Temp" },
+  { entity = "sensor.living_room_humidity", label = "Room Humidity" },
+  { entity = "sensor.office_humidity", label = "Office Humidity" },
+]
+
+# Lighting page: every light.* in HA, grouped by HA area. Light-group helpers get full-width tiles;
+# individual bulbs get compact tiles with these short names (unlisted bulbs show HA's friendly name).
+# A helper without an area takes its members' area ("Whole Home" if they span several areas).
+[lighting.short_names]
+"light.hue_bathroom_1" = "Bath 1"
+"light.hue_bathroom_2" = "Bath 2"
+"light.kitchen_bulb_1" = "Kitchen 1"
+
+# Plugs page: grouped by HA area; hold 2 s to toggle. Live wattage from sensor.<plug>_power.
+# Only lights and the plugs listed here can ever be switched from the panel.
+[plugs]
+entities = [
+  { entity = "switch.desk", label = "Desk" },
+  { entity = "switch.tv_stand", label = "TV Stand" },
+]
+
+[ui]
+idle_return_seconds = 90   # sub-pages return to Home after this long untouched

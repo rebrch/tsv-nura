@@ -1,0 +1,16 @@
+#!/bin/sh
+# Full-screen Chromium on the Home Assistant dashboard (started by tsv-kiosk.service inside cage).
+# Settings: /etc/tsv-kiosk/kiosk.env (HA_URL, HA_DASHBOARD_PATH, CHROMIUM_EXTRA_FLAGS).
+# Profile (keeps the HA login) lives on disk in /var/lib/kiosk/chromium; caches live in RAM.
+RUN=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+exec chromium \
+	--ozone-platform=wayland \
+	--kiosk --start-fullscreen --app="${HA_URL%/}${HA_DASHBOARD_PATH:-/}" \
+	--user-data-dir=/var/lib/kiosk/chromium \
+	--disk-cache-dir="$RUN/chromium-cache" --disk-cache-size=52428800 \
+	--no-first-run --noerrdialogs --disable-infobars --disable-session-crashed-bubble \
+	--disable-features=Translate,TranslateUI,MediaRouter --disable-component-update \
+	--check-for-update-interval=31536000 --password-store=basic \
+	--overscroll-history-navigation=0 --disable-pinch --touch-events=enabled \
+	--autoplay-policy=no-user-gesture-required \
+	${CHROMIUM_EXTRA_FLAGS:-}

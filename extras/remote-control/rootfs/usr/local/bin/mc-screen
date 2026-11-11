@@ -1,0 +1,15 @@
+#!/bin/sh
+# Live view of the kiosk display for the monitoring host: writes "<length>\n<jpeg bytes>" frames to
+# stdout (~2/s) until the reader goes away. Length 0 = no frame (compositor restarting).
+# Only runs while someone watches; ~0.1 s CPU per frame.
+export XDG_RUNTIME_DIR=/run/user/$(id -u) WAYLAND_DISPLAY=wayland-0
+f=$XDG_RUNTIME_DIR/mc-screen.$$.jpg
+trap 'rm -f "$f"; exit 0' EXIT HUP INT TERM PIPE
+while :; do
+	if grim -t jpeg -q 70 "$f" 2>/dev/null; then
+		printf '%s\n' "$(wc -c < "$f")" && cat "$f" || exit 0
+	else
+		echo 0 || exit 0
+	fi
+	sleep 0.5
+done

@@ -1,0 +1,42 @@
+From 8d735487a2cefd172bc354d8df7f20615b500bb1 Mon Sep 17 00:00:00 2001
+From: Your Name <you@example.com>
+Date: Mon, 9 Nov 2026 23:12:38 -0500
+Subject: [PATCH 2/2] ipa: libipa: camera_sensor_helper: Add Samsung S5KC505A
+
+The S5KC505A analogue gain register is linear with 0x20 for 1x, and the
+10-bit black level is 64.
+
+Without a helper the simple pipeline's software ISP only adjusts the
+exposure time, which leaves dim scenes very dark.
+
+Signed-off-by: Your Name <you@example.com>
+---
+ src/ipa/libipa/camera_sensor_helper.cpp | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/src/ipa/libipa/camera_sensor_helper.cpp b/src/ipa/libipa/camera_sensor_helper.cpp
+index e3e3e53..5b56ff7 100644
+--- a/src/ipa/libipa/camera_sensor_helper.cpp
++++ b/src/ipa/libipa/camera_sensor_helper.cpp
+@@ -743,6 +743,18 @@ public:
+ };
+ REGISTER_CAMERA_SENSOR_HELPER("ov5693", CameraSensorHelperOv5693)
+ 
++class CameraSensorHelperS5kc505a : public CameraSensorHelper
++{
++public:
++	CameraSensorHelperS5kc505a()
++	{
++		/* SMIA-style analogue gain: 0x20 = 1x. 10-bit black level 64. */
++		blackLevel_ = 4096;
++		gain_ = AnalogueGainLinear{ 1, 0, 0, 32 };
++	}
++};
++REGISTER_CAMERA_SENSOR_HELPER("s5kc505a", CameraSensorHelperS5kc505a)
++
+ class CameraSensorHelperOv64a40 : public CameraSensorHelper
+ {
+ public:
+-- 
+2.47.3
+

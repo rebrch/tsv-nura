@@ -1,0 +1,119 @@
+From 3f0fa021de5262c58157628e6ca5596ad90640f3 Mon Sep 17 00:00:00 2001
+From: Your Name <you@example.com>
+Date: Mon, 9 Nov 2026 23:03:35 -0500
+Subject: [PATCH 1/4] media: qcom: camss: Use dedicated CSIPHY resources for
+ MSM8953
+
+MSM8953 reuses the MSM8996 CSIPHY resources, whose CSIPHY timer clock
+rate table starts at 100 MHz. On MSM8953 GCC produces 100 MHz for
+csiNphytimer_clk_src from GPLL0_EARLY_DIV, and enabling
+gcc_camss_csi0phytimer_clk at that rate fails:
+
+  gcc_camss_csi0phytimer_clk status stuck at 'off'
+  qcom-camss 1b00020.camss: clock enable failed: -16
+  qcom-camss 1b00020.camss: Failed to power up pipeline: -16
+
+so no CSIPHY can be powered up and streaming always fails with -EBUSY.
+The 200 MHz and 266.67 MHz entries are sourced directly from GPLL0 and
+work.
+
+Add an MSM8953 copy of the CSIPHY resources that only lists the GPLL0
+rates, leaving MSM8996 untouched.
+
+Tested on the Lenovo ThinkSmart View (APQ8053) with a Samsung S5KC505A
+sensor on CSIPHY0: RAW10 capture through csiphy0 -> csid0 -> ispif0 ->
+vfe0_rdi0 works with this change and fails without it.
+
+Fixes: <commit that added MSM8953 CAMSS support>
+Signed-off-by: Your Name <you@example.com>
+---
+ drivers/media/platform/qcom/camss/camss.c | 63 ++++++++++++++++++++++-
+ 1 file changed, 61 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/media/platform/qcom/camss/camss.c b/drivers/media/platform/qcom/camss/camss.c
+index eba1fa7..13a2c04 100644
+--- a/drivers/media/platform/qcom/camss/camss.c
++++ b/drivers/media/platform/qcom/camss/camss.c
+@@ -515,6 +515,65 @@ static const struct camss_subdev_resources csiphy_res_8x96[] = {
+ 	}
+ };
+ 
++/*
++ * MSM8953 CSIPHY: as MSM8996, but the CSIPHY timer clock cannot run at 100 MHz.
++ * GCC derives 100 MHz from GPLL0_EARLY_DIV and the gcc_camss_csiNphytimer_clk
++ * branch then never turns on ("status stuck at 'off'"), so stream-on fails with
++ * -EBUSY. The 200 MHz and 266.67 MHz rates come straight from GPLL0 and work.
++ */
++static const struct camss_subdev_resources csiphy_res_8x53[] = {
++	/* CSIPHY0 */
++	{
++		.regulators = {},
++		.clock = { "top_ahb", "ispif_ahb", "ahb", "csiphy0_timer" },
++		.clock_rate = { { 0 },
++				{ 0 },
++				{ 0 },
++				{ 200000000, 266666667 } },
++		.reg = { "csiphy0", "csiphy0_clk_mux" },
++		.interrupt = { "csiphy0" },
++		.csiphy = {
++			.id = 0,
++			.hw_ops = &csiphy_ops_3ph_1_0,
++			.formats = &csiphy_formats_8x96
++		}
++	},
++
++	/* CSIPHY1 */
++	{
++		.regulators = {},
++		.clock = { "top_ahb", "ispif_ahb", "ahb", "csiphy1_timer" },
++		.clock_rate = { { 0 },
++				{ 0 },
++				{ 0 },
++				{ 200000000, 266666667 } },
++		.reg = { "csiphy1", "csiphy1_clk_mux" },
++		.interrupt = { "csiphy1" },
++		.csiphy = {
++			.id = 1,
++			.hw_ops = &csiphy_ops_3ph_1_0,
++			.formats = &csiphy_formats_8x96
++		}
++	},
++
++	/* CSIPHY2 */
++	{
++		.regulators = {},
++		.clock = { "top_ahb", "ispif_ahb", "ahb", "csiphy2_timer" },
++		.clock_rate = { { 0 },
++				{ 0 },
++				{ 0 },
++				{ 200000000, 266666667 } },
++		.reg = { "csiphy2", "csiphy2_clk_mux" },
++		.interrupt = { "csiphy2" },
++		.csiphy = {
++			.id = 2,
++			.hw_ops = &csiphy_ops_3ph_1_0,
++			.formats = &csiphy_formats_8x96
++		}
++	}
++};
++
+ static const struct camss_subdev_resources csid_res_8x96[] = {
+ 	/* CSID0 */
+ 	{
+@@ -5115,11 +5174,11 @@ static const struct camss_resources msm8953_resources = {
+ 	.version = CAMSS_8x53,
+ 	.icc_res = icc_res_8x53,
+ 	.icc_path_num = ARRAY_SIZE(icc_res_8x53),
+-	.csiphy_res = csiphy_res_8x96,
++	.csiphy_res = csiphy_res_8x53,
+ 	.csid_res = csid_res_8x53,
+ 	.ispif_res = &ispif_res_8x53,
+ 	.vfe_res = vfe_res_8x53,
+-	.csiphy_num = ARRAY_SIZE(csiphy_res_8x96),
++	.csiphy_num = ARRAY_SIZE(csiphy_res_8x53),
+ 	.csid_num = ARRAY_SIZE(csid_res_8x53),
+ 	.vfe_num = ARRAY_SIZE(vfe_res_8x53),
+ };
+-- 
+2.47.3
+

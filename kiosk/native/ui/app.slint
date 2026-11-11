@@ -1,0 +1,823 @@
+// tsv-panel UI for the ThinkSmart View (800x1280 portrait).
+// Colors and icons follow master-control's web UI (web/src/app.css, lib/Icon.svelte).
+// Pages: 0 = Home, 1 = Lighting, 2 = Plugs, 3 = Cameras.
+
+export global Theme {
+    out property <color> bg: #0b0d12;
+    out property <color> surface: #161a22;
+    out property <color> surface-2: #1f2430;
+    out property <color> border: #2a3040;
+    out property <color> text: #e8ebf2;
+    out property <color> dim: #8a93a6;
+    out property <color> accent: #f5b942;
+    out property <color> ok: #3ecf8e;
+    out property <color> bad: #ff5d5d;
+}
+
+export global Icons {
+    out property <string> light: "M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z";
+    out property <string> plug: "M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4";
+    out property <string> camera: "M15 10l5-3v10l-5-3zM3 7h12v10H3z";
+    out property <string> home: "M3 11l9-7 9 7M5 9.5V20h5v-6h4v6h5V9.5";
+}
+
+export struct TileData {
+    id: string,
+    name: string,
+    value: string,
+    icon: string,   // SVG path data, 24x24 viewbox
+    on: bool,
+    dead: bool,
+    tap: bool,      // tap toggles
+    hold: int,      // 0 = none, 1 = 1 s hold opens brightness, 2 = 2 s hold toggles
+    brightness: int,
+    small: bool,    // compact bulb tile (Lighting page)
+    col: int,       // Lighting section placement: column and span of the 4-column grid,
+    span: int,
+    y: int,         // and pixel offset/height (computed in Rust)
+    h: int,
+}
+
+export struct SectionData {
+    title: string,
+    tiles: [TileData],
+    height: int,
+}
+
+component Icon inherits Path {
+    in property <string> d;
+    in property <length> size: 26px;
+    in property <color> color: Theme.dim;
+    width: size;
+    height: size;
+    commands: d;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    fill: transparent;
+    stroke: color;
+    stroke-width: size / 13;
+}
+
+// Shared touch behaviour: tap, hold (1 s / 2 s) with a fill showing hold progress.
+component Pressable inherits Rectangle {
+    in property <TileData> data;
+    callback tapped(string);
+    callback held(string, int);
+    property <bool> fired;
+    property <bool> holding: ta.pressed && data.hold != 0 && !fired;
+
+    border-radius: 16px;
+    background: Theme.surface;
+    border-width: 1px;
+    border-color: data.on ? Theme.accent : Theme.border;
+    opacity: data.dead ? 0.45 : 1.0;
+    clip: true;
+
+    progress := Rectangle {
+        x: 0;
+        y: 0;
+        height: parent.height;
+        width: 0;
+        background: Theme.accent.with-alpha(0.18);
+    }
+
+    // Brightness bar along the bottom edge of lights that are on.
+    if data.on && data.brightness > 0: Rectangle {
+        x: 0;
+        y: parent.height - self.height;
+        height: 4px;
+        width: parent.width * data.brightness / 100;
+        background: Theme.accent;
+    }
+
+    @children
+
+    ta := TouchArea {
+        enabled: !data.dead && (data.tap || data.hold != 0);
+        changed pressed => {
+            if (self.pressed) {
+                root.fired = false;
+            }
+        }
+        clicked => {
+            if (data.tap && !root.fired) {
+                root.tapped(data.id);
+            }
+        }
+    }
+
+    Timer {
+        interval: data.hold == 1 ? 1000ms : 2000ms;
+        running: root.holding;
+        triggered => {
+            root.fired = true;
+            root.held(data.id, data.hold);
+        }
+    }
+
+    states [
+        hold-short when root.holding && data.hold == 1: {
+            progress.width: root.width;
+            in {
+                animate progress.width { duration: 1000ms; }
+            }
+        }
+        hold-long when root.holding && data.hold == 2: {
+            progress.width: root.width;
+            in {
+                animate progress.width { duration: 2000ms; }
+            }
+        }
+    ]
+}
+
+// Home screen light: icon above name and state.
+component BigTile inherits Pressable {
+    VerticalLayout {
+        padding: 16px;
+        spacing: 6px;
+        alignment: center;
+        HorizontalLayout {
+            alignment: center;
+            Icon {
+                d: root.data.icon;
+                size: 44px;
+                color: root.data.on ? Theme.accent : Theme.dim;
+            }
+        }
+        Text {
+            text: root.data.name;
+            color: Theme.text;
+            font-size: 21px;
+            font-weight: 500;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+        Text {
+            text: root.data.value;
+            color: root.data.on ? Theme.accent : Theme.dim;
+            font-size: 18px;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+    }
+}
+
+// List tile: icon left, name and state stacked. Taller tiles (helpers, plugs) get larger text.
+component RowTile inherits Pressable {
+    property <bool> large: root.height >= 70px;
+    HorizontalLayout {
+        padding-left: large ? 18px : 14px;
+        padding-right: 12px;
+        spacing: large ? 14px : 12px;
+        Icon {
+            y: (parent.height - self.height) / 2;
+            d: root.data.icon;
+            size: large ? 32px : 26px;
+            color: root.data.on ? Theme.accent : Theme.dim;
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            Text {
+                text: root.data.name;
+                color: Theme.text;
+                font-size: large ? 23px : 19px;
+                font-weight: 500;
+                overflow: elide;
+            }
+            Text {
+                text: root.data.value;
+                color: root.data.on ? Theme.accent : Theme.dim;
+                font-size: large ? 18px : 16px;
+                overflow: elide;
+            }
+        }
+    }
+}
+
+// Compact bulb tile: small icon, short name, state underneath.
+component SmallTile inherits Pressable {
+    border-radius: 12px;
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 8px;
+        spacing: 8px;
+        Icon {
+            y: (parent.height - self.height) / 2;
+            d: root.data.icon;
+            size: 20px;
+            color: root.data.on ? Theme.accent : Theme.dim;
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 0px;
+            Text {
+                text: root.data.name;
+                color: Theme.text;
+                font-size: 16px;
+                font-weight: 500;
+                overflow: elide;
+            }
+            Text {
+                text: root.data.value;
+                color: root.data.on ? Theme.accent : Theme.dim;
+                font-size: 14px;
+                overflow: elide;
+            }
+        }
+    }
+}
+
+// Climate reading: label on top, large value.
+component StatTile inherits Rectangle {
+    in property <TileData> data;
+    border-radius: 16px;
+    background: Theme.surface;
+    border-width: 1px;
+    border-color: Theme.border;
+    opacity: data.dead ? 0.45 : 1.0;
+    VerticalLayout {
+        padding: 22px;
+        spacing: 4px;
+        alignment: center;
+        HorizontalLayout {
+            spacing: 10px;
+            Icon {
+                d: data.icon;
+                size: 24px;
+            }
+            Text {
+                text: data.name;
+                color: Theme.dim;
+                font-size: 20px;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+        Text {
+            text: data.value;
+            color: Theme.text;
+            font-size: 58px;
+            font-weight: 300;
+            overflow: elide;
+        }
+    }
+}
+
+component NavButton inherits Rectangle {
+    in property <string> icon;
+    in property <length> icon-size: 48px;
+    in property <string> label;
+    in property <bool> active;
+    callback clicked;
+    width: 128px;
+    height: 128px;
+    border-radius: 24px;
+    background: nta.pressed ? Theme.surface-2 : Theme.surface;
+    border-width: 1px;
+    border-color: active ? Theme.accent : Theme.border;
+    VerticalLayout {
+        alignment: center;
+        spacing: 8px;
+        HorizontalLayout {
+            alignment: center;
+            Icon {
+                d: icon;
+                size: icon-size;
+                color: active ? Theme.accent : Theme.text;
+            }
+        }
+        if label != "": Text {
+            text: label;
+            color: Theme.dim;
+            font-size: 17px;
+            horizontal-alignment: center;
+        }
+    }
+    nta := TouchArea {
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+component PillButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> primary;
+    callback clicked;
+    height: 88px;
+    border-radius: 44px;
+    background: primary ? (pta.pressed ? Theme.accent.darker(0.2) : Theme.accent) : (pta.pressed ? Theme.surface-2 : Theme.bg);
+    border-width: primary ? 0 : 1px;
+    border-color: Theme.border;
+    Text {
+        text: label;
+        color: primary ? #1a1406 : Theme.text;
+        font-size: 24px;
+        font-weight: 600;
+    }
+    pta := TouchArea {
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+component SectionTitle inherits Text {
+    color: Theme.dim;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+}
+
+// Fixed-column grid of tiles (Slint has no wrapping layout).
+component TileGrid inherits Rectangle {
+    in property <[TileData]> tiles;
+    in property <int> columns: 3;
+    in property <length> tile-h: 78px;
+    in property <length> gap: 10px;
+    in property <bool> stat;
+    callback tapped(string);
+    callback held(string, int);
+    property <length> tile-w: (self.width - (columns - 1) * gap) / columns;
+    height: tiles.length == 0 ? 0 : (Math.ceil(tiles.length / columns) * (tile-h + gap) - gap);
+    for t[i] in tiles: Rectangle {
+        x: Math.mod(i, columns) * (tile-w + gap);
+        y: Math.floor(i / columns) * (tile-h + gap);
+        width: tile-w;
+        height: tile-h;
+        if stat: StatTile {
+            width: parent.width;
+            height: parent.height;
+            data: t;
+        }
+        if !stat: RowTile {
+            width: parent.width;
+            height: parent.height;
+            data: t;
+            tapped(id) => {
+                root.tapped(id);
+            }
+            held(id, k) => {
+                root.held(id, k);
+            }
+        }
+    }
+}
+
+// Lighting section: positions computed in Rust (helpers full width, bulbs four per row).
+component SectionGrid inherits Rectangle {
+    in property <[TileData]> tiles;
+    in property <int> px-height;
+    in property <int> columns: 4;
+    in property <length> gap: 8px;
+    callback tapped(string);
+    callback held(string, int);
+    property <length> col-w: (self.width - (columns - 1) * gap) / columns;
+    height: px-height * 1px;
+    for t in tiles: Rectangle {
+        x: t.col * (col-w + gap);
+        y: t.y * 1px;
+        width: t.span * col-w + (t.span - 1) * gap;
+        height: t.h * 1px;
+        if t.small: SmallTile {
+            width: parent.width;
+            height: parent.height;
+            data: t;
+            tapped(id) => {
+                root.tapped(id);
+            }
+            held(id, k) => {
+                root.held(id, k);
+            }
+        }
+        if !t.small: RowTile {
+            width: parent.width;
+            height: parent.height;
+            data: t;
+            tapped(id) => {
+                root.tapped(id);
+            }
+            held(id, k) => {
+                root.held(id, k);
+            }
+        }
+    }
+}
+
+component PageHeader inherits HorizontalLayout {
+    in property <string> title;
+    in property <string> time;
+    callback home;
+    spacing: 20px;
+    NavButton {
+        width: 96px;
+        height: 96px;
+        icon: Icons.home;
+        icon-size: 40px;
+        label: "";
+        clicked => {
+            root.home();
+        }
+    }
+    Text {
+        text: title;
+        color: Theme.text;
+        font-size: 44px;
+        font-weight: 300;
+        vertical-alignment: center;
+    }
+    Text {
+        horizontal-stretch: 1;
+        horizontal-alignment: right;
+        vertical-alignment: center;
+        text: time;
+        color: Theme.dim;
+        font-size: 32px;
+        font-weight: 300;
+    }
+}
+
+export component AppWindow inherits Window {
+    in property <string> time: "--:--";
+    in property <string> date;
+    in property <string> weather-temp;
+    in property <string> weather-cond;
+    in property <string> weather-icon;
+    in property <bool> connected;
+    in property <[TileData]> home-lights;
+    in property <[TileData]> climate;
+    in property <int> climate-columns: 2;
+    in property <[SectionData]> light-sections;
+    in property <[SectionData]> plug-sections;
+
+    in-out property <int> page: 0;
+
+    // Brightness overlay
+    in-out property <bool> dimmer-open;
+    in-out property <string> dimmer-id;
+    in-out property <string> dimmer-name;
+    in-out property <int> dimmer-value;
+    out property <bool> dimmer-dragging;
+    property <int> dimmer-sent;
+
+    callback activate(string);              // toggle
+    callback open-dimmer(string);           // Rust fills dimmer-* and opens
+    callback set-brightness(string, int);   // 0 = off
+    callback interacted();                  // any touch: resets the idle timer
+
+    title: "tsv-panel";
+    background: Theme.bg;
+    default-font-family: "Inter";
+    preferred-width: 800px;
+    preferred-height: 1280px;
+
+    property <length> pad: 28px;
+
+    function tile-held(id: string, kind: int) {
+        root.interacted();
+        if (kind == 1) {
+            root.open-dimmer(id);
+        } else if (kind == 2) {
+            root.activate(id);
+        }
+    }
+    function tile-tapped(id: string) {
+        root.interacted();
+        root.activate(id);
+    }
+    function go(p: int) {
+        root.interacted();
+        root.page = p;
+    }
+
+    // ---------------------------------------------------------------- Home
+    if page == 0: VerticalLayout {
+        padding: pad;
+        padding-top: 36px;
+        spacing: 26px;
+
+        HorizontalLayout {
+            spacing: 20px;
+            vertical-stretch: 0;
+            VerticalLayout {
+                alignment: end;
+                Text {
+                    text: time;
+                    color: Theme.text;
+                    font-size: 104px;
+                    font-weight: 300;
+                }
+                Text {
+                    text: date;
+                    color: Theme.dim;
+                    font-size: 26px;
+                }
+            }
+            VerticalLayout {
+                alignment: end;
+                if weather-temp != "": HorizontalLayout {
+                    alignment: end;
+                    spacing: 12px;
+                    Icon {
+                        y: (parent.height - self.height) / 2;
+                        d: weather-icon;
+                        size: 52px;
+                    }
+                    Text {
+                        text: weather-temp;
+                        color: Theme.text;
+                        font-size: 60px;
+                        font-weight: 300;
+                    }
+                }
+                Text {
+                    horizontal-alignment: right;
+                    text: weather-cond;
+                    color: Theme.dim;
+                    font-size: 20px;
+                }
+                if !connected: Text {
+                    horizontal-alignment: right;
+                    text: "Home Assistant offline";
+                    color: Theme.bad;
+                    font-size: 18px;
+                }
+            }
+        }
+
+        VerticalLayout {
+            spacing: 10px;
+            vertical-stretch: 0;
+            alignment: start;
+            SectionTitle {
+                text: "LIGHTING";
+            }
+            HorizontalLayout {
+                spacing: 10px;
+                height: 176px;
+                for t in home-lights: BigTile {
+                    horizontal-stretch: 1;
+                    min-width: 0;
+                    preferred-width: 0;
+                    data: t;
+                    tapped(id) => {
+                        root.tile-tapped(id);
+                    }
+                    held(id, k) => {
+                        root.tile-held(id, k);
+                    }
+                }
+            }
+        }
+
+        VerticalLayout {
+            spacing: 10px;
+            vertical-stretch: 0;
+            alignment: start;
+            SectionTitle {
+                text: "CLIMATE";
+            }
+            TileGrid {
+                stat: true;
+                tiles: climate;
+                columns: climate-columns;
+                tile-h: 150px;
+            }
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+        }
+
+        HorizontalLayout {
+            spacing: 20px;
+            alignment: start;
+            NavButton {
+                icon: Icons.light;
+                label: "Lighting";
+                clicked => {
+                    root.go(1);
+                }
+            }
+            NavButton {
+                icon: Icons.plug;
+                label: "Plugs";
+                clicked => {
+                    root.go(2);
+                }
+            }
+            NavButton {
+                icon: Icons.camera;
+                label: "Cameras";
+                clicked => {
+                    root.go(3);
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- Sub-pages
+    if page != 0: VerticalLayout {
+        padding: pad;
+        padding-top: 28px;
+        spacing: 20px;
+
+        PageHeader {
+            title: page == 1 ? "Lighting" : page == 2 ? "Plugs" : "Cameras";
+            time: time;
+            home => {
+                root.go(0);
+            }
+        }
+
+        if page == 1: Flickable {
+            vertical-stretch: 1;
+            content-height: lights-content.preferred-height;
+            lights-content := VerticalLayout {
+                spacing: 14px;
+                for s in light-sections: VerticalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    SectionTitle {
+                        text: s.title.to-uppercase();
+                    }
+                    SectionGrid {
+                        tiles: s.tiles;
+                        px-height: s.height;
+                        tapped(id) => {
+                            root.tile-tapped(id);
+                        }
+                        held(id, k) => {
+                            root.tile-held(id, k);
+                        }
+                    }
+                }
+            }
+        }
+
+        if page == 2: VerticalLayout {
+            vertical-stretch: 1;
+            spacing: 14px;
+            Text {
+                text: "Hold a plug for 2 seconds to switch it.";
+                color: Theme.dim;
+                font-size: 18px;
+            }
+            VerticalLayout {
+                vertical-stretch: 0;
+                spacing: 14px;
+                for s in plug-sections: VerticalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    SectionTitle {
+                        text: s.title.to-uppercase();
+                    }
+                    SectionGrid {
+                        tiles: s.tiles;
+                        px-height: s.height;
+                        held(id, k) => {
+                            root.tile-held(id, k);
+                        }
+                    }
+                }
+            }
+            Rectangle {
+                vertical-stretch: 1;
+            }
+        }
+
+        if page == 3: Rectangle {
+            vertical-stretch: 1;
+            VerticalLayout {
+                alignment: center;
+                spacing: 16px;
+                HorizontalLayout {
+                    alignment: center;
+                    Icon {
+                        d: Icons.camera;
+                        size: 96px;
+                    }
+                }
+                Text {
+                    text: "UniFi Protect is coming soon";
+                    color: Theme.dim;
+                    font-size: 24px;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+
+    }
+
+    // ---------------------------------------------------------------- Brightness overlay
+    if dimmer-open: Rectangle {
+        background: #000000c0;
+        TouchArea {
+            clicked => {
+                root.interacted();
+                root.dimmer-open = false;
+            }
+        }
+        Rectangle {
+            width: 520px;
+            height: 1040px;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            background: Theme.surface;
+            border-radius: 32px;
+            border-width: 1px;
+            border-color: Theme.border;
+            TouchArea { }   // keep taps on the panel from closing it
+            VerticalLayout {
+                padding: 36px;
+                spacing: 22px;
+                Text {
+                    text: dimmer-name;
+                    color: Theme.text;
+                    font-size: 32px;
+                    font-weight: 500;
+                    horizontal-alignment: center;
+                    overflow: elide;
+                }
+                Text {
+                    text: dimmer-value == 0 ? "Off" : dimmer-value + "%";
+                    color: dimmer-value == 0 ? Theme.dim : Theme.accent;
+                    font-size: 64px;
+                    font-weight: 300;
+                    horizontal-alignment: center;
+                }
+                HorizontalLayout {
+                    alignment: center;
+                    vertical-stretch: 1;
+                    track := Rectangle {
+                        width: 200px;
+                        border-radius: 40px;
+                        background: Theme.bg;
+                        border-width: 1px;
+                        border-color: Theme.border;
+                        clip: true;
+                        Rectangle {
+                            width: parent.width;
+                            height: parent.height * dimmer-value / 100;
+                            y: parent.height - self.height;
+                            background: Theme.accent;
+                        }
+                        TouchArea {
+                            pointer-event(ev) => {
+                                if (ev.kind == PointerEventKind.down) {
+                                    root.interacted();
+                                    root.dimmer-dragging = true;
+                                    root.dimmer-value = Math.max(1, Math.min(100, Math.round((1 - self.mouse-y / track.height) * 100)));
+                                } else if (ev.kind == PointerEventKind.up) {
+                                    root.dimmer-dragging = false;
+                                    root.dimmer-sent = root.dimmer-value;
+                                    root.set-brightness(root.dimmer-id, root.dimmer-value);
+                                }
+                            }
+                            moved => {
+                                if (self.pressed) {
+                                    root.dimmer-value = Math.max(1, Math.min(100, Math.round((1 - self.mouse-y / track.height) * 100)));
+                                }
+                            }
+                        }
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 16px;
+                    PillButton {
+                        horizontal-stretch: 1;
+                        label: "Off";
+                        clicked => {
+                            root.interacted();
+                            root.dimmer-value = 0;
+                            root.set-brightness(root.dimmer-id, 0);
+                            root.dimmer-open = false;
+                        }
+                    }
+                    PillButton {
+                        horizontal-stretch: 1;
+                        primary: true;
+                        label: "Done";
+                        clicked => {
+                            root.interacted();
+                            root.dimmer-open = false;
+                        }
+                    }
+                }
+            }
+        }
+        // Live updates while dragging, at most every 400 ms.
+        Timer {
+            interval: 400ms;
+            running: root.dimmer-dragging;
+            triggered => {
+                if (root.dimmer-value != root.dimmer-sent) {
+                    root.dimmer-sent = root.dimmer-value;
+                    root.set-brightness(root.dimmer-id, root.dimmer-value);
+                }
+            }
+        }
+    }
+}

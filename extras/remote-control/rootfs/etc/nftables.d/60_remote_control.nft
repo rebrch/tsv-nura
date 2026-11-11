@@ -1,0 +1,7 @@
+# the monitoring host: Prometheus scrapes node_exporter.
+# @MONITOR_HOST@ is replaced from .env (MONITOR_HOST) by setup-remote.sh.
+table inet filter {
+	chain input {
+		ip saddr @MONITOR_HOST@ tcp dport 9100 accept comment "node_exporter for the monitoring host"
+	}
+}

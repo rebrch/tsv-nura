@@ -1,0 +1,42 @@
+diff -ruN a/src/ipa/libipa/camera_sensor_helper.cpp b/src/ipa/libipa/camera_sensor_helper.cpp
+--- a/src/ipa/libipa/camera_sensor_helper.cpp	2026-11-09 22:45:51.871254413 -0500
++++ b/src/ipa/libipa/camera_sensor_helper.cpp	2026-11-09 22:45:51.899254647 -0500
+@@ -743,6 +743,18 @@
+ };
+ REGISTER_CAMERA_SENSOR_HELPER("ov5693", CameraSensorHelperOv5693)
+ 
++class CameraSensorHelperS5kc505a : public CameraSensorHelper
++{
++public:
++	CameraSensorHelperS5kc505a()
++	{
++		/* SMIA-style analogue gain: 0x20 = 1x. 10-bit black level 64. */
++		blackLevel_ = 4096;
++		gain_ = AnalogueGainLinear{ 1, 0, 0, 32 };
++	}
++};
++REGISTER_CAMERA_SENSOR_HELPER("s5kc505a", CameraSensorHelperS5kc505a)
++
+ class CameraSensorHelperOv64a40 : public CameraSensorHelper
+ {
+ public:
+diff -ruN a/src/libcamera/sensor/camera_sensor_properties.cpp b/src/libcamera/sensor/camera_sensor_properties.cpp
+--- a/src/libcamera/sensor/camera_sensor_properties.cpp	2026-11-09 22:45:51.879254480 -0500
++++ b/src/libcamera/sensor/camera_sensor_properties.cpp	2026-11-09 22:45:51.899254647 -0500
+@@ -417,6 +417,16 @@
+ 			},
+ 			.sensorDelays = { },
+ 		} },
++		{ "s5kc505a", {
++			.unitCellSize = { 1120, 1120 },
++			.testPatternModes = {},
++			.sensorDelays = {
++				.exposureDelay = 2,
++				.gainDelay = 2,
++				.vblankDelay = 2,
++				.hblankDelay = 2
++			},
++		} },
+ 		{ "ov64a40", {
+ 			.unitCellSize = { 1008, 1008 },
+ 			.testPatternModes = {

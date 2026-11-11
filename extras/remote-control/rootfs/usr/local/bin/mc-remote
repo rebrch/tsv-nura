@@ -1,0 +1,9 @@
+#!/bin/sh
+# Forced command for the monitoring host's SSH key (user mcremote): only these actions exist (reboot | screen | camera | ping).
+case "$SSH_ORIGINAL_COMMAND" in
+	reboot) exec sudo -n /usr/bin/systemctl reboot ;;
+	screen) exec sudo -n -u kiosk /usr/local/bin/mc-screen ;;
+	camera) exec sudo -n -u tsvcam /usr/local/bin/mc-camera ;;
+	ping) echo pong ;;
+	*) echo "mc-remote: unknown command" >&2; exit 2 ;;
+esac
